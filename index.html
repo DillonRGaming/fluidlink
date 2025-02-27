@@ -2,93 +2,47 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebXR Room with Physics</title>
-    <meta name="description" content="A simple WebXR room with physics and interactive objects">
-    <!-- A-Frame library -->
+    <title>WebXR VR Room</title>
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <!-- Physics system for A-Frame -->
     <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
   </head>
   <body>
-    <a-scene physics="debug: false">
-      <!-- Floor -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#7BC8A4" static-body class="collidable"></a-plane>
+    <a-scene physics="iterations: 10; gravity: -9.8" xr-mode-ui="enabled: true">
+      <!-- Floor (Fixes floating issue) -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#7BC8A4" static-body></a-plane>
 
-      <!-- Invisible walls (room boundaries) -->
-      <a-box position="0 2.5 -10" depth="0.5" height="5" width="20" static-body visible="false" class="collidable"></a-box>
-      <a-box position="0 2.5 10" depth="0.5" height="5" width="20" static-body visible="false" class="collidable"></a-box>
-      <a-box position="-10 2.5 0" depth="20" height="5" width="0.5" static-body visible="false" class="collidable"></a-box>
-      <a-box position="10 2.5 0" depth="20" height="5" width="0.5" static-body visible="false" class="collidable"></a-box>
+      <!-- Table -->
+      <a-box position="0 0.75 -3" depth="2" height="0.1" width="2" color="#8B4513" static-body></a-box>
 
-      <!-- Table in front of you -->
-      <a-box position="0 0.75 -3" depth="2" height="0.1" width="2" color="#8B4513" static-body class="collidable"></a-box>
-      <!-- Table legs -->
-      <a-box position="-0.85 0.375 -3" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
-      <a-box position="0.85 0.375 -3" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
-      <a-box position="-0.85 0.375 -2" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
-      <a-box position="0.85 0.375 -2" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
-
-      <!-- Random objects on the table -->
+      <!-- Random Objects -->
       <a-entity id="random-objects"></a-entity>
       <script>
-        // Component to spawn random objects on the table
         AFRAME.registerComponent('spawn-objects', {
           init: function () {
-            // Table top is at y = 0.75; we add a small offset so objects start just above it
-            var tableSurfaceY = 0.8;
-            // Table dimensions: center at (0, -3) with width 2 and depth 2
-            var tableMinX = -0.9;
-            var tableMaxX = 0.9;
-            var tableMinZ = -3.9;
-            var tableMaxZ = -2.1;
-            // Spawn 20 random objects
-            for (var i = 0; i < 20; i++) {
-              var entity = document.createElement('a-entity');
-              // Randomly choose a primitive type
-              var types = ['box', 'sphere', 'cone', 'cylinder'];
-              var type = types[Math.floor(Math.random() * types.length)];
-              // Random position on table surface
-              var posX = tableMinX + Math.random() * (tableMaxX - tableMinX);
-              var posZ = tableMinZ + Math.random() * (tableMaxZ - tableMinZ);
-              var posY = tableSurfaceY + 0.2; // start slightly above the table
+            let parent = this.el;
+            for (let i = 0; i < 15; i++) {
+              let entity = document.createElement('a-entity');
+              let types = ['box', 'sphere', 'cylinder'];
+              let type = types[Math.floor(Math.random() * types.length)];
+              let posX = -0.8 + Math.random() * 1.6;
+              let posZ = -3.8 + Math.random() * 1.6;
+              let posY = 0.9;
               entity.setAttribute('position', {x: posX, y: posY, z: posZ});
-              // Random scale for variability
-              var scale = 0.2 + Math.random() * 0.3;
-              if (type === 'box') {
-                entity.setAttribute('geometry', {primitive: 'box', height: scale, width: scale, depth: scale});
-              } else if (type === 'sphere') {
-                entity.setAttribute('geometry', {primitive: 'sphere', radius: scale / 2});
-              } else if (type === 'cone') {
-                entity.setAttribute('geometry', {primitive: 'cone', radiusBottom: scale / 2, radiusTop: scale / 4, height: scale});
-              } else if (type === 'cylinder') {
-                entity.setAttribute('geometry', {primitive: 'cylinder', radius: scale / 2, height: scale});
-              }
-              // Give it a random color
-              var randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
-              entity.setAttribute('material', {color: randomColor});
-              // Enable physics: dynamic body so it responds to collisions
+              entity.setAttribute('geometry', {primitive: type, height: 0.3, radius: 0.15});
+              entity.setAttribute('material', {color: '#' + Math.floor(Math.random() * 16777215).toString(16)});
               entity.setAttribute('dynamic-body', {mass: 1});
-              entity.setAttribute('class', 'collidable');
-              this.el.appendChild(entity);
+              parent.appendChild(entity);
             }
           }
         });
-        // Attach the spawn component to the random objects container
         document.querySelector('#random-objects').setAttribute('spawn-objects', '');
       </script>
 
-      <!-- Camera rig with controllers -->
+      <!-- Camera & Controllers -->
       <a-entity id="cameraRig" position="0 1.6 0">
-        <!-- Camera with look and WASD controls -->
-        <a-entity camera look-controls wasd-controls></a-entity>
-        <!-- Left controller with an invisible collision sphere -->
-        <a-entity laser-controls="hand: left">
-          <a-sphere radius="0.05" opacity="0" kinematic-body></a-sphere>
-        </a-entity>
-        <!-- Right controller with an invisible collision sphere -->
-        <a-entity laser-controls="hand: right">
-          <a-sphere radius="0.05" opacity="0" kinematic-body></a-sphere>
-        </a-entity>
+        <a-entity camera position="0 0 0"></a-entity>
+        <a-entity oculus-touch-controls="hand: left" collision-filter="group: controller; collidesWith: objects"></a-entity>
+        <a-entity oculus-touch-controls="hand: right" collision-filter="group: controller; collidesWith: objects"></a-entity>
       </a-entity>
     </a-scene>
   </body>
