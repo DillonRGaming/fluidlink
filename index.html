@@ -1,150 +1,95 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Quest 2 Gesture Test - Full</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-</head>
-<body>
-    <a-scene physics="driver: cannon" renderer="antialias: true">
-        <!-- Assets -->
-        <a-assets>
-            <img id="grassTex" src="https://cdn.glitch.com/1e7c4e9b-4e3b-4e3c-8f0d-7e8e8f8f8f8f%2Fgrass.png">
-            <img id="stoneTex" src="https://cdn.glitch.com/1e7c4e9b-4e3b-4e3c-8f0d-7e8e8f8f8f8f%2Fstone.png">
-        </a-assets>
+  <head>
+    <meta charset="utf-8">
+    <title>WebXR Room with Physics</title>
+    <meta name="description" content="A simple WebXR room with physics and interactive objects">
+    <!-- A-Frame library -->
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <!-- Physics system for A-Frame -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
+  </head>
+  <body>
+    <a-scene physics="debug: false">
+      <!-- Floor -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#7BC8A4" static-body class="collidable"></a-plane>
 
-        <!-- Player Rig -->
-        <a-entity id="player" position="0 0 0">
-            <a-entity id="camera" camera position="0 1.6 0" look-controls></a-entity>
-            <a-entity id="leftHand" hand-tracking-controls="hand: left" super-hands 
-                      geometry="primitive: sphere; radius: 0.1" material="color: #00FF00"></a-entity>
-            <a-entity id="rightHand" hand-tracking-controls="hand: right" super-hands 
-                      geometry="primitive: sphere; radius: 0.1" material="color: #00FF00"></a-entity>
-            <a-entity id="leftController" oculus-touch-controls="hand: left" super-hands></a-entity>
-            <a-entity id="rightController" oculus-touch-controls="hand: right" super-hands 
-                      teleport-controls="button: trigger; cameraRig: #player; teleportOrigin: #camera"></a-entity>
+      <!-- Invisible walls (room boundaries) -->
+      <a-box position="0 2.5 -10" depth="0.5" height="5" width="20" static-body visible="false" class="collidable"></a-box>
+      <a-box position="0 2.5 10" depth="0.5" height="5" width="20" static-body visible="false" class="collidable"></a-box>
+      <a-box position="-10 2.5 0" depth="20" height="5" width="0.5" static-body visible="false" class="collidable"></a-box>
+      <a-box position="10 2.5 0" depth="20" height="5" width="0.5" static-body visible="false" class="collidable"></a-box>
+
+      <!-- Table in front of you -->
+      <a-box position="0 0.75 -3" depth="2" height="0.1" width="2" color="#8B4513" static-body class="collidable"></a-box>
+      <!-- Table legs -->
+      <a-box position="-0.85 0.375 -3" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
+      <a-box position="0.85 0.375 -3" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
+      <a-box position="-0.85 0.375 -2" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
+      <a-box position="0.85 0.375 -2" depth="0.1" height="0.75" width="0.1" color="#8B4513" static-body class="collidable"></a-box>
+
+      <!-- Random objects on the table -->
+      <a-entity id="random-objects"></a-entity>
+      <script>
+        // Component to spawn random objects on the table
+        AFRAME.registerComponent('spawn-objects', {
+          init: function () {
+            // Table top is at y = 0.75; we add a small offset so objects start just above it
+            var tableSurfaceY = 0.8;
+            // Table dimensions: center at (0, -3) with width 2 and depth 2
+            var tableMinX = -0.9;
+            var tableMaxX = 0.9;
+            var tableMinZ = -3.9;
+            var tableMaxZ = -2.1;
+            // Spawn 20 random objects
+            for (var i = 0; i < 20; i++) {
+              var entity = document.createElement('a-entity');
+              // Randomly choose a primitive type
+              var types = ['box', 'sphere', 'cone', 'cylinder'];
+              var type = types[Math.floor(Math.random() * types.length)];
+              // Random position on table surface
+              var posX = tableMinX + Math.random() * (tableMaxX - tableMinX);
+              var posZ = tableMinZ + Math.random() * (tableMaxZ - tableMinZ);
+              var posY = tableSurfaceY + 0.2; // start slightly above the table
+              entity.setAttribute('position', {x: posX, y: posY, z: posZ});
+              // Random scale for variability
+              var scale = 0.2 + Math.random() * 0.3;
+              if (type === 'box') {
+                entity.setAttribute('geometry', {primitive: 'box', height: scale, width: scale, depth: scale});
+              } else if (type === 'sphere') {
+                entity.setAttribute('geometry', {primitive: 'sphere', radius: scale / 2});
+              } else if (type === 'cone') {
+                entity.setAttribute('geometry', {primitive: 'cone', radiusBottom: scale / 2, radiusTop: scale / 4, height: scale});
+              } else if (type === 'cylinder') {
+                entity.setAttribute('geometry', {primitive: 'cylinder', radius: scale / 2, height: scale});
+              }
+              // Give it a random color
+              var randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
+              entity.setAttribute('material', {color: randomColor});
+              // Enable physics: dynamic body so it responds to collisions
+              entity.setAttribute('dynamic-body', {mass: 1});
+              entity.setAttribute('class', 'collidable');
+              this.el.appendChild(entity);
+            }
+          }
+        });
+        // Attach the spawn component to the random objects container
+        document.querySelector('#random-objects').setAttribute('spawn-objects', '');
+      </script>
+
+      <!-- Camera rig with controllers -->
+      <a-entity id="cameraRig" position="0 1.6 0">
+        <!-- Camera with look and WASD controls -->
+        <a-entity camera look-controls wasd-controls></a-entity>
+        <!-- Left controller with an invisible collision sphere -->
+        <a-entity laser-controls="hand: left">
+          <a-sphere radius="0.05" opacity="0" kinematic-body></a-sphere>
         </a-entity>
-
-        <!-- Ground -->
-        <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" 
-                 material="src: #grassTex; repeat: 5 5" static-body></a-plane>
-
-        <!-- Grabbable Objects -->
-        <a-box class="grabbable" position="0 0.5 -1" width="0.5" height="0.5" depth="0.5" 
-               material="src: #stoneTex; repeat: 2 2" dynamic-body></a-box>
-        <a-sphere class="grabbable" position="1 0.5 -2" radius="0.3" color="#FFD700" dynamic-body></a-sphere>
-
-        <!-- Lighting -->
-        <a-light type="ambient" intensity="0.8" color="#FFFFFF"></a-light>
-        <a-light type="directional" intensity="1" position="0 5 -3" color="#FFFFFF"></a-light>
-
-        <!-- Sky -->
-        <a-sky color="#87CEEB"></a-sky>
-
-        <!-- Gesture Controls Script -->
-        <script>
-            AFRAME.registerComponent('gesture-controls', {
-                init: function () {
-                    this.rightHand = document.querySelector('#rightHand');
-                    this.leftHand = document.querySelector('#leftHand');
-                    this.grabbables = document.querySelectorAll('.grabbable');
-                    this.previousRightState = null;
-                    this.clapCooldown = 0;
-                    this.targetObject = null;
-                },
-
-                tick: function (time, delta) {
-                    const rightJoints = this.rightHand.components['hand-tracking-controls']?.joints;
-                    const leftJoints = this.leftHand.components['hand-tracking-controls']?.joints;
-                    if (!rightJoints || !leftJoints || rightJoints.length < 21) return;
-
-                    // Hand states
-                    const rightState = this.isPointing(rightJoints) ? 'pointing' : this.isFist(rightJoints) ? 'fist' : 'none';
-                    const leftState = this.isFist(leftJoints) ? 'fist' : 'none';
-
-                    // Pull object: Pointing -> Fist transition
-                    if (this.previousRightState === 'pointing' && rightState === 'fist') {
-                        this.startPulling();
-                    }
-                    if (rightState !== 'fist') this.targetObject = null; // Reset when not pulling
-                    if (this.targetObject) this.updatePulling();
-                    this.previousRightState = rightState;
-
-                    // Clap: Both fists close together
-                    if (this.clapCooldown <= 0) {
-                        const rightWrist = rightJoints[0].position;
-                        const leftWrist = leftJoints[0].position;
-                        const distance = rightWrist.distanceTo(leftWrist);
-                        if (leftState === 'fist' && rightState === 'fist' && distance < 0.25) {
-                            this.changeColors();
-                            this.clapCooldown = 500; // 500ms cooldown
-                        }
-                    }
-                    this.clapCooldown -= delta;
-                },
-
-                isPointing: function (joints) {
-                    const wrist = joints[0].position;
-                    const indexTip = joints[8].position;
-                    const middleTip = joints[12].position;
-                    const ringTip = joints[16].position;
-                    const pinkyTip = joints[20].position;
-
-                    const indexDist = wrist.distanceTo(indexTip);
-                    const middleDist = wrist.distanceTo(middleTip);
-                    const ringDist = wrist.distanceTo(ringTip);
-                    const pinkyDist = wrist.distanceTo(pinkyTip);
-
-                    return indexDist > 0.12 && middleDist < 0.07 && ringDist < 0.07 && pinkyDist < 0.07;
-                },
-
-                isFist: function (joints) {
-                    const wrist = joints[0].position;
-                    const indexTip = joints[8].position;
-                    const middleTip = joints[12].position;
-                    const ringTip = joints[16].position;
-                    const pinkyTip = joints[20].position;
-
-                    return indexTip.distanceTo(wrist) < 0.07 &&
-                           middleTip.distanceTo(wrist) < 0.07 &&
-                           ringTip.distanceTo(wrist) < 0.07 &&
-                           pinkyTip.distanceTo(wrist) < 0.07;
-                },
-
-                startPulling: function () {
-                    const handPos = this.rightHand.object3D.position;
-                    let closestDist = Infinity;
-                    this.grabbables.forEach(obj => {
-                        const objPos = obj.object3D.position;
-                        const dist = handPos.distanceTo(objPos);
-                        if (dist < 2 && dist < closestDist) {
-                            closestDist = dist;
-                            this.targetObject = obj;
-                        }
-                    });
-                },
-
-                updatePulling: function () {
-                    if (!this.targetObject) return;
-                    const handPos = this.rightHand.object3D.position;
-                    const objPos = this.targetObject.object3D.position;
-                    const direction = handPos.clone().sub(objPos).normalize();
-                    const speed = 0.05;
-                    this.targetObject.body.velocity.set(direction.x * speed, direction.y * speed, direction.z * speed);
-                },
-
-                changeColors: function () {
-                    const randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
-                    this.leftHand.setAttribute('material', 'color', randomColor);
-                    this.rightHand.setAttribute('material', 'color', randomColor);
-                }
-            });
-
-            // Attach to player entity
-            document.addEventListener('DOMContentLoaded', function () {
-                document.querySelector('#player').setAttribute('gesture-controls', '');
-            });
-        </script>
+        <!-- Right controller with an invisible collision sphere -->
+        <a-entity laser-controls="hand: right">
+          <a-sphere radius="0.05" opacity="0" kinematic-body></a-sphere>
+        </a-entity>
+      </a-entity>
     </a-scene>
-</body>
+  </body>
 </html>
