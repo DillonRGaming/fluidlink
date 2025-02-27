@@ -1,87 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Quest 2 Gesture Test - Fixed</title>
+    <title>Quest 2 Gesture Test - Full</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-    <script>
-        AFRAME.registerComponent('gesture-controls', {
-            init: function () {
-                this.hands = {
-                    left: { color: '#FFFFFF', fist: false, pointing: false },
-                    right: { color: '#FFFFFF', fist: false, pointing: false }
-                };
-                this.targetObject = null;
-                this.clapCooldown = 0;
-            },
-            tick: function (time, delta) {
-                const leftHand = document.querySelector('#leftHand');
-                const rightHand = document.querySelector('#rightHand');
-                const objects = document.querySelectorAll('.grabbable');
-
-                this.updateHand(leftHand, 'left');
-                this.updateHand(rightHand, 'right');
-
-                // Clap to change colors
-                if (this.clapCooldown <= 0 && this.hands.left.fist && this.hands.right.fist) {
-                    const leftPos = leftHand.getAttribute('position');
-                    const rightPos = rightHand.getAttribute('position');
-                    if (leftPos.distanceTo(rightPos) < 0.4) {
-                        this.changeColors();
-                        this.clapCooldown = 500;
-                    }
-                }
-                this.clapCooldown -= delta;
-
-                // Point + fist to pull (right hand)
-                if (this.hands.right.pointing && this.hands.right.fist && objects.length > 0) {
-                    this.pullObject(rightHand, objects);
-                }
-            },
-            updateHand: function (handEl, side) {
-                const joints = handEl.components['hand-tracking-controls']?.joints;
-                if (!joints || joints.length < 12) return;
-
-                const thumbTip = joints[4].position;
-                const indexTip = joints[8].position;
-                const middleTip = joints[12].position;
-
-                const indexDist = indexTip.distanceTo(thumbTip);
-                const middleDist = middleTip.distanceTo(thumbTip);
-                this.hands[side].pointing = indexDist > 0.05 && middleDist < 0.04;
-                this.hands[side].fist = indexDist < 0.04 && middleDist < 0.04;
-
-                handEl.setAttribute('material', 'color', this.hands[side].color);
-            },
-            pullObject: function (handEl, objects) {
-                if (!this.targetObject) {
-                    const handPos = handEl.getAttribute('position');
-                    let closestDist = Infinity;
-                    objects.forEach(obj => {
-                        const dist = handPos.distanceTo(obj.getAttribute('position'));
-                        if (dist < 3 && dist < closestDist) {
-                            closestDist = dist;
-                            this.targetObject = obj;
-                        }
-                    });
-                }
-                if (this.targetObject) {
-                    const handPos = handEl.getAttribute('position');
-                    const objPos = this.targetObject.getAttribute('position');
-                    const direction = handPos.clone().sub(objPos).normalize().multiplyScalar(0.05);
-                    this.targetObject.setAttribute('position', {
-                        x: objPos.x + direction.x,
-                        y: objPos.y + direction.y,
-                        z: objPos.z + direction.z
-                    });
-                }
-            },
-            changeColors: function () {
-                this.hands.left.color = '#' + Math.floor(Math.random() * 16777215).toString(16);
-                this.hands.right.color = '#' + Math.floor(Math.random() * 16777215).toString(16);
-            }
-        });
-    </script>
 </head>
 <body>
     <a-scene physics="driver: cannon" renderer="antialias: true">
@@ -92,35 +14,137 @@
         </a-assets>
 
         <!-- Player Rig -->
-        <a-entity id="player" position="0 0 0" gesture-controls>
+        <a-entity id="player" position="0 0 0">
             <a-entity id="camera" camera position="0 1.6 0" look-controls></a-entity>
             <a-entity id="leftHand" hand-tracking-controls="hand: left" super-hands 
-                      geometry="primitive: sphere; radius: 0.05" material="color: #FFFFFF"></a-entity>
+                      geometry="primitive: sphere; radius: 0.1" material="color: #00FF00"></a-entity>
             <a-entity id="rightHand" hand-tracking-controls="hand: right" super-hands 
-                      geometry="primitive: sphere; radius: 0.05" material="color: #FFFFFF"></a-entity>
+                      geometry="primitive: sphere; radius: 0.1" material="color: #00FF00"></a-entity>
             <a-entity id="leftController" oculus-touch-controls="hand: left" super-hands></a-entity>
             <a-entity id="rightController" oculus-touch-controls="hand: right" super-hands 
                       teleport-controls="button: trigger; cameraRig: #player; teleportOrigin: #camera"></a-entity>
         </a-entity>
 
         <!-- Ground -->
-        <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" 
-                 material="src: #grassTex; repeat: 10 10" static-body></a-plane>
+        <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" 
+                 material="src: #grassTex; repeat: 5 5" static-body></a-plane>
 
-        <!-- Objects -->
-        <a-box class="grabbable" position="0 0.5 -2" width="1" height="1" depth="1" 
+        <!-- Grabbable Objects -->
+        <a-box class="grabbable" position="0 0.5 -1" width="0.5" height="0.5" depth="0.5" 
                material="src: #stoneTex; repeat: 2 2" dynamic-body></a-box>
-        <a-box class="grabbable" position="2 0.5 -3" width="0.8" height="0.8" depth="0.8" 
-               material="color: #8B4513" dynamic-body></a-box>
-        <a-sphere class="grabbable" position="-1 0.5 -1" radius="0.5" material="color: #FFD700" 
-                  dynamic-body></a-sphere>
+        <a-sphere class="grabbable" position="1 0.5 -2" radius="0.3" color="#FFD700" dynamic-body></a-sphere>
 
         <!-- Lighting -->
-        <a-light type="directional" intensity="1" position="3 5 -3" color="#FFFFFF"></a-light>
-        <a-light type="ambient" intensity="0.6" color="#FFFFFF"></a-light>
+        <a-light type="ambient" intensity="0.8" color="#FFFFFF"></a-light>
+        <a-light type="directional" intensity="1" position="0 5 -3" color="#FFFFFF"></a-light>
 
         <!-- Sky -->
         <a-sky color="#87CEEB"></a-sky>
+
+        <!-- Gesture Controls Script -->
+        <script>
+            AFRAME.registerComponent('gesture-controls', {
+                init: function () {
+                    this.rightHand = document.querySelector('#rightHand');
+                    this.leftHand = document.querySelector('#leftHand');
+                    this.grabbables = document.querySelectorAll('.grabbable');
+                    this.previousRightState = null;
+                    this.clapCooldown = 0;
+                    this.targetObject = null;
+                },
+
+                tick: function (time, delta) {
+                    const rightJoints = this.rightHand.components['hand-tracking-controls']?.joints;
+                    const leftJoints = this.leftHand.components['hand-tracking-controls']?.joints;
+                    if (!rightJoints || !leftJoints || rightJoints.length < 21) return;
+
+                    // Hand states
+                    const rightState = this.isPointing(rightJoints) ? 'pointing' : this.isFist(rightJoints) ? 'fist' : 'none';
+                    const leftState = this.isFist(leftJoints) ? 'fist' : 'none';
+
+                    // Pull object: Pointing -> Fist transition
+                    if (this.previousRightState === 'pointing' && rightState === 'fist') {
+                        this.startPulling();
+                    }
+                    if (rightState !== 'fist') this.targetObject = null; // Reset when not pulling
+                    if (this.targetObject) this.updatePulling();
+                    this.previousRightState = rightState;
+
+                    // Clap: Both fists close together
+                    if (this.clapCooldown <= 0) {
+                        const rightWrist = rightJoints[0].position;
+                        const leftWrist = leftJoints[0].position;
+                        const distance = rightWrist.distanceTo(leftWrist);
+                        if (leftState === 'fist' && rightState === 'fist' && distance < 0.25) {
+                            this.changeColors();
+                            this.clapCooldown = 500; // 500ms cooldown
+                        }
+                    }
+                    this.clapCooldown -= delta;
+                },
+
+                isPointing: function (joints) {
+                    const wrist = joints[0].position;
+                    const indexTip = joints[8].position;
+                    const middleTip = joints[12].position;
+                    const ringTip = joints[16].position;
+                    const pinkyTip = joints[20].position;
+
+                    const indexDist = wrist.distanceTo(indexTip);
+                    const middleDist = wrist.distanceTo(middleTip);
+                    const ringDist = wrist.distanceTo(ringTip);
+                    const pinkyDist = wrist.distanceTo(pinkyTip);
+
+                    return indexDist > 0.12 && middleDist < 0.07 && ringDist < 0.07 && pinkyDist < 0.07;
+                },
+
+                isFist: function (joints) {
+                    const wrist = joints[0].position;
+                    const indexTip = joints[8].position;
+                    const middleTip = joints[12].position;
+                    const ringTip = joints[16].position;
+                    const pinkyTip = joints[20].position;
+
+                    return indexTip.distanceTo(wrist) < 0.07 &&
+                           middleTip.distanceTo(wrist) < 0.07 &&
+                           ringTip.distanceTo(wrist) < 0.07 &&
+                           pinkyTip.distanceTo(wrist) < 0.07;
+                },
+
+                startPulling: function () {
+                    const handPos = this.rightHand.object3D.position;
+                    let closestDist = Infinity;
+                    this.grabbables.forEach(obj => {
+                        const objPos = obj.object3D.position;
+                        const dist = handPos.distanceTo(objPos);
+                        if (dist < 2 && dist < closestDist) {
+                            closestDist = dist;
+                            this.targetObject = obj;
+                        }
+                    });
+                },
+
+                updatePulling: function () {
+                    if (!this.targetObject) return;
+                    const handPos = this.rightHand.object3D.position;
+                    const objPos = this.targetObject.object3D.position;
+                    const direction = handPos.clone().sub(objPos).normalize();
+                    const speed = 0.05;
+                    this.targetObject.body.velocity.set(direction.x * speed, direction.y * speed, direction.z * speed);
+                },
+
+                changeColors: function () {
+                    const randomColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
+                    this.leftHand.setAttribute('material', 'color', randomColor);
+                    this.rightHand.setAttribute('material', 'color', randomColor);
+                }
+            });
+
+            // Attach to player entity
+            document.addEventListener('DOMContentLoaded', function () {
+                document.querySelector('#player').setAttribute('gesture-controls', '');
+            });
+        </script>
     </a-scene>
 </body>
 </html>
