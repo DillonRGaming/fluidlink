@@ -1,53 +1,141 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Three.js WebXR VR</title>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest 2 VR Room</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  </head>
-  <body>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/VRButton.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
     <script>
-      // Basic Three.js scene setup
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+        // SCENE SETUP
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x202020);
 
-      // Enable VR
-      renderer.xr.enabled = true;
-      document.body.appendChild(VRButton.createButton(renderer));
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.6, 3);
 
-      // Add a floor
-      const floorGeometry = new THREE.PlaneGeometry(10, 10);
-      const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x7BC8A4 });
-      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-      floor.rotation.x = -Math.PI / 2;
-      scene.add(floor);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        document.body.appendChild(VRButton.createButton(renderer));
 
-      // Add a simple object
-      const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-      const boxMaterial = new THREE.MeshStandardMaterial({ color: 0x4CC3D9 });
-      const box = new THREE.Mesh(boxGeometry, boxMaterial);
-      box.position.y = 0.5;
-      scene.add(box);
+        // LIGHTING
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
 
-      // Lighting
-      const ambientLight = new THREE.AmbientLight(0x404040);
-      scene.add(ambientLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-      scene.add(directionalLight);
+        // PHYSICS SETUP
+        const world = new CANNON.World();
+        world.gravity.set(0, -9.82, 0);
 
-      // Set camera position
-      camera.position.set(0, 1.6, 3);
-
-      // Animation loop
-      function animate() {
-        renderer.setAnimationLoop(() => {
-          renderer.render(scene, camera);
+        // FLOOR
+        const floorMaterial = new CANNON.Material();
+        const floorBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Plane(),
+            material: floorMaterial
         });
-      }
+        floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+        world.addBody(floorBody);
 
-      animate();
+        const floorGeometry = new THREE.PlaneGeometry(10, 10);
+        const floorMesh = new THREE.Mesh(floorGeometry, new THREE.MeshStandardMaterial({ color: 0x555555 }));
+        floorMesh.rotation.x = -Math.PI / 2;
+        scene.add(floorMesh);
+
+        // TABLE
+        const tableBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Box(new CANNON.Vec3(1, 0.05, 1)),
+            position: new CANNON.Vec3(0, 0.75, -2)
+        });
+        world.addBody(tableBody);
+
+        const tableMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(2, 0.1, 2),
+            new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+        );
+        tableMesh.position.set(0, 0.75, -2);
+        scene.add(tableMesh);
+
+        // RANDOM OBJECTS ON TABLE
+        const objects = [];
+        const objectBodies = [];
+
+        function createRandomObject() {
+            const shapes = ['box', 'sphere', 'cylinder'];
+            const type = shapes[Math.floor(Math.random() * shapes.length)];
+            let objectMesh, objectBody;
+
+            const x = (Math.random() - 0.5) * 1.5;
+            const y = 1;
+            const z = -2 + (Math.random() - 0.5) * 1.5;
+
+            if (type === 'box') {
+                objectMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }));
+                objectBody = new CANNON.Body({ mass: 1, shape: new CANNON.Box(new CANNON.Vec3(0.1, 0.1, 0.1)) });
+            } else if (type === 'sphere') {
+                objectMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }));
+                objectBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.1) });
+            } else {
+                objectMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 16), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }));
+                objectBody = new CANNON.Body({ mass: 1, shape: new CANNON.Cylinder(0.1, 0.1, 0.2, 16) });
+            }
+
+            objectMesh.position.set(x, y, z);
+            objectBody.position.set(x, y, z);
+            scene.add(objectMesh);
+            world.addBody(objectBody);
+
+            objects.push(objectMesh);
+            objectBodies.push(objectBody);
+        }
+
+        for (let i = 0; i < 10; i++) {
+            createRandomObject();
+        }
+
+        // VR CONTROLLERS (Hands)
+        const controller1 = renderer.xr.getController(0);
+        scene.add(controller1);
+
+        const controller2 = renderer.xr.getController(1);
+        scene.add(controller2);
+
+        // INTERACTION (PUSH OBJECTS)
+        function checkCollision(controller) {
+            for (let i = 0; i < objects.length; i++) {
+                const dist = controller.position.distanceTo(objects[i].position);
+                if (dist < 0.2) {
+                    objectBodies[i].applyImpulse(new CANNON.Vec3(0, 2, 0), objectBodies[i].position);
+                }
+            }
+        }
+
+        controller1.addEventListener('selectstart', () => checkCollision(controller1));
+        controller2.addEventListener('selectstart', () => checkCollision(controller2));
+
+        // UPDATE LOOP
+        function animate() {
+            world.step(1 / 60);
+
+            for (let i = 0; i < objects.length; i++) {
+                objects[i].position.copy(objectBodies[i].position);
+                objects[i].quaternion.copy(objectBodies[i].quaternion);
+            }
+
+            renderer.setAnimationLoop(() => {
+                renderer.render(scene, camera);
+            });
+        }
+
+        animate();
     </script>
-  </body>
+</body>
 </html>
