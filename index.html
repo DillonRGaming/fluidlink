@@ -1,30 +1,137 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Simple Quest 2 Hand Tracking Test</title>
+    <title>Quest 2 Gesture Test</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+    <script>
+        // Custom component for gesture detection
+        AFRAME.registerComponent('gesture-controls', {
+            init: function () {
+                this.hands = {
+                    left: { color: '#FFFFFF', fist: false, pointing: false },
+                    right: { color: '#FFFFFF', fist: false, pointing: false }
+                };
+                this.targetObject = null;
+                this.clapCooldown = 0;
+            },
+            tick: function (time, delta) {
+                const leftHand = document.querySelector('#leftHand');
+                const rightHand = document.querySelector('#rightHand');
+                const objects = document.querySelectorAll('.grabbable');
+
+                // Update hand states
+                this.updateHandState(leftHand, 'left');
+                this.updateHandState(rightHand, 'right');
+
+                // Clap detection (both fists close together)
+                if (this.clapCooldown <= 0 && this.hands.left.fist && this.hands.right.fist) {
+                    const leftPos = leftHand.getAttribute('position');
+                    const rightPos = rightHand.getAttribute('position');
+                    const distance = leftPos.distanceTo(rightPos);
+                    if (distance < 0.3) {
+                        this.changeHandColors();
+                        this.clapCooldown = 500; // Half-second cooldown
+                    }
+                }
+                this.clapCooldown -= delta;
+
+                // Pull object with fist while pointing
+                if (this.hands.right.pointing && this.hands.right.fist) {
+                    this.pullObject(rightHand, objects);
+                }
+            },
+            updateHandState: function (handEl, handSide) {
+                const joints = handEl.components['hand-tracking-controls'].joints;
+                if (!joints || joints.length === 0) return;
+
+                // Get key joint positions
+                const thumbTip = joints[4].position;  // Thumb tip
+                const indexTip = joints[8].position;  // Index tip
+                const middleTip = joints[12].position; // Middle tip
+
+                // Detect pointing (index extended, others curled)
+                const indexToThumb = indexTip.distanceTo(thumbTip);
+                const middleToThumb = middleTip.distanceTo(thumbTip);
+                this.hands[handSide].pointing = indexToThumb > 0.05 && middleToThumb < 0.03;
+
+                // Detect fist (all fingers curled)
+                this.hands[handSide].fist = indexToThumb < 0.03 && middleToThumb < 0.03;
+
+                // Apply hand color
+                handEl.setAttribute('material', 'color', this.hands[handSide].color);
+            },
+            pullObject: function (handEl, objects) {
+                if (!this.targetObject) {
+                    const handPos = handEl.getAttribute('position');
+                    let closest = null;
+                    let minDist = Infinity;
+                    objects.forEach(obj => {
+                        const objPos = obj.getAttribute('position');
+                        const dist = handPos.distanceTo(objPos);
+                        if (dist < 2 && dist < minDist) {
+                            minDist = dist;
+                            closest = obj;
+                        }
+                    });
+                    this.targetObject = closest;
+                }
+                if (this.targetObject) {
+                    const handPos = handEl.getAttribute('position');
+                    const objPos = this.targetObject.getAttribute('position');
+                    const direction = handPos.clone().sub(objPos).normalize().multiplyScalar(0.1);
+                    this.targetObject.body.applyImpulse(direction, objPos);
+                }
+            },
+            changeHandColors: function () {
+                const randomColor = () => '#' + Math.floor(Math.random()*16777215).toString(16);
+                this.hands.left.color = randomColor();
+                this.hands.right.color = randomColor();
+            }
+        });
+    </script>
 </head>
 <body>
-    <a-scene physics="driver: ammo">
-        <!-- Camera (Headset View) -->
-        <a-entity id="camera" camera position="0 1.6 0" look-controls wasd-controls></a-entity>
+    <a-scene physics="driver: ammo" renderer="antialias: true; physicallyCorrectLights: true" shadow="type: pcfsoft">
+        <!-- Assets for Textures -->
+        <a-assets>
+            <img id="stoneTex" src="https://cdn.glitch.com/1e7c4e9b-4e3b-4e3c-8f0d-7e8e8f8f8f8f%2Fstone.png">
+            <img id="grassTex" src="https://cdn.glitch.com/1e7c4e9b-4e3b-4e3c-8f0d-7e8e8f8f8f8f%2Fgrass.png">
+            <img id="woodTex" src="https://cdn.glitch.com/1e7c4e9b-4e3b-4e3c-8f0d-7e8e8f8f8f8f%2Fwood.png">
+        </a-assets>
 
-        <!-- Hand Tracking -->
-        <a-entity id="leftHand" hand-tracking-controls="hand: left" 
-                  physics-collider grab-start="target: #grabbableBox"></a-entity>
-        <a-entity id="rightHand" hand-tracking-controls="hand: right" 
-                  physics-collider grab-start="target: #grabbableBox"></a-entity>
+        <!-- Player Rig with Movement and Gestures -->
+        <a-entity id="player" position="0 0 0" gesture-controls>
+            <a-entity id="camera" camera position="0 1.6 0" look-controls wasd-controls="fly: false; acceleration: 65"></a-entity>
+            <!-- Hands -->
+            <a-entity id="leftHand" hand-tracking-controls="hand: left" physics-collider 
+                      super-hands="colliderEvent: collisions" grab-start="target: .grabbable" geometry="primitive: sphere; radius: 0.05" material="color: #FFFFFF"></a-entity>
+            <a-entity id="rightHand" hand-tracking-controls="hand: right" physics-collider 
+                      super-hands="colliderEvent: collisions" grab-start="target: .grabbable" geometry="primitive: sphere; radius: 0.05" material="color: #FFFFFF"></a-entity>
+            <!-- Controllers -->
+            <a-entity id="leftController" oculus-touch-controls="hand: left" physics-collider 
+                      super-hands="colliderEvent: collisions" grab-start="target: .grabbable"></a-entity>
+            <a-entity id="rightController" oculus-touch-controls="hand: right" physics-collider 
+                      super-hands="colliderEvent: collisions" grab-start="target: .grabbable" teleport-controls="button: trigger; cameraRig: #player; teleportOrigin: #camera"></a-entity>
+        </a-entity>
 
         <!-- Ground -->
-        <a-plane rotation="-90 0 0" width="10" height="10" color="#7BC8A4" static-body></a-plane>
+        <a-plane rotation="-90 0 0" width="20" height="20" material="src: #grassTex; repeat: 10 10" shadow="receive: true" static-body></a-plane>
 
-        <!-- Grabbable Box -->
-        <a-box id="grabbableBox" position="0 0.5 -2" width="0.5" height="0.5" depth="0.5" 
-               color="red" dynamic-body grabbable></a-box>
+        <!-- Objects -->
+        <a-box class="grabbable" position="0 0.5 -2" width="1" height="1" depth="1" material="src: #stoneTex; repeat: 2 2" 
+               dynamic-body="mass: 2" shadow="cast: true; receive: true"></a-box>
+        <a-box class="grabbable" position="-1 0.5 -3" width="0.8" height="0.8" depth="0.8" material="src: #woodTex; repeat: 2 2" 
+               dynamic-body="mass: 1.5" shadow="cast: true; receive: true"></a-box>
+        <a-sphere class="grabbable" position="1 0.5 -1" radius="0.5" material="color: #FFD700" 
+                  dynamic-body="mass: 1" shadow="cast: true; receive: true"></a-sphere>
+
+        <!-- Lighting -->
+        <a-light type="directional" intensity="0.8" position="2 5 -2" rotation="-45 45 0" shadow="cast: true"></a-light>
+        <a-light type="ambient" intensity="0.4" color="#FFFFFF"></a-light>
 
         <!-- Sky -->
-        <a-sky color="#ECECEC"></a-sky>
+        <a-sky color="#87CEEB"></a-sky>
     </a-scene>
 </body>
 </html>
