@@ -1,143 +1,280 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quest 2 VR Room</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/VRButton.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+  <meta charset="utf-8">
+  <title>Oculus Quest 2 VR Game</title>
+  <meta name="description" content="A simple VR game for Oculus Quest 2">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-physics-system@v4.0.1/dist/aframe-physics-system.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
+  <script>
+    // Component to handle the hand gestures
+    AFRAME.registerComponent('gesture-handler', {
+      schema: {
+        rightHandEl: {type: 'selector'},
+        leftHandEl: {type: 'selector'},
+        objects: {type: 'selectorAll'}
+      },
+      
+      init: function() {
+        this.rightPinchPose = false;
+        this.leftPinchPose = false;
+        this.rightPointPose = false;
+        this.rightFistPose = false;
+        this.leftFistPose = false;
+        this.clapDetected = false;
+        this.clapCooldown = false;
+        this.lastRightPosition = new THREE.Vector3();
+        this.lastLeftPosition = new THREE.Vector3();
+        this.rightHandPosition = new THREE.Vector3();
+        this.leftHandPosition = new THREE.Vector3();
+        this.handDistance = 0;
+        
+        // Setup event listeners for hand tracking events
+        this.el.sceneEl.addEventListener('enter-vr', () => {
+          if (this.el.sceneEl.is('vr-mode')) {
+            console.log('Entered VR mode');
+          }
+        });
+      },
+      
+      tick: function(time, deltaTime) {
+        if (!this.data.rightHandEl || !this.data.leftHandEl) return;
+        
+        const rightHand = this.data.rightHandEl;
+        const leftHand = this.data.leftHandEl;
+        
+        // Get hand positions
+        rightHand.object3D.getWorldPosition(this.rightHandPosition);
+        leftHand.object3D.getWorldPosition(this.leftHandPosition);
+        
+        // Check gestures
+        this.checkPointAndPull(rightHand, this.data.objects);
+        this.checkClap(rightHand, leftHand);
+      },
+      
+      checkPointAndPull: function(rightHand, objects) {
+        // Check for point gesture (index extended, others curled)
+        const pointing = rightHand.components['hand-tracking-controls'] && 
+                        rightHand.components['hand-tracking-controls'].indexTipPosition && 
+                        !rightHand.components['hand-tracking-controls'].middleTipPosition;
+        
+        // Check for fist gesture
+        const fist = rightHand.components['hand-tracking-controls'] && 
+                    !rightHand.components['hand-tracking-controls'].indexTipPosition && 
+                    !rightHand.components['hand-tracking-controls'].thumbTipPosition;
+        
+        // Point then clench to pull objects
+        if (pointing && !this.rightPointPose) {
+          this.rightPointPose = true;
+          console.log('Pointing detected');
+        } else if (!pointing && this.rightPointPose) {
+          this.rightPointPose = false;
+        }
+        
+        if (fist && !this.rightFistPose && this.rightPointPose) {
+          this.rightFistPose = true;
+          console.log('Pull gesture detected');
+          
+          // Find closest object within 2m
+          let closestObject = null;
+          let closestDistance = 2; // 2 meter limit
+          
+          objects.forEach(object => {
+            // Skip if object is being held
+            if (object.components.grabbable && object.components.grabbable.grabbed) return;
+            
+            const objectPosition = new THREE.Vector3();
+            object.object3D.getWorldPosition(objectPosition);
+            
+            const distance = this.rightHandPosition.distanceTo(objectPosition);
+            if (distance < closestDistance) {
+              closestObject = object;
+              closestDistance = distance;
+            }
+          });
+          
+          // Pull the object
+          if (closestObject) {
+            console.log('Pulling object');
+            const direction = new THREE.Vector3().subVectors(this.rightHandPosition, closestObject.object3D.position).normalize();
+            const pullForce = 5;
+            
+            // Apply impulse to pull object
+            const physicsBody = closestObject.components['dynamic-body'].body;
+            if (physicsBody) {
+              physicsBody.velocity.set(
+                direction.x * pullForce,
+                direction.y * pullForce,
+                direction.z * pullForce
+              );
+            }
+          }
+        } else if (!fist && this.rightFistPose) {
+          this.rightFistPose = false;
+        }
+      },
+      
+      checkClap: function(rightHand, leftHand) {
+        // Check for fist gestures on both hands
+        const rightFist = rightHand.components['hand-tracking-controls'] && 
+                        !rightHand.components['hand-tracking-controls'].indexTipPosition && 
+                        !rightHand.components['hand-tracking-controls'].thumbTipPosition;
+        
+        const leftFist = leftHand.components['hand-tracking-controls'] && 
+                        !leftHand.components['hand-tracking-controls'].indexTipPosition && 
+                        !leftHand.components['hand-tracking-controls'].thumbTipPosition;
+        
+        // Calculate distance between hands
+        this.handDistance = this.rightHandPosition.distanceTo(this.leftHandPosition);
+        
+        // Detect clap (both hands in fists and < 0.25m apart)
+        if (rightFist && leftFist && this.handDistance < 0.25 && !this.clapCooldown) {
+          if (!this.clapDetected) {
+            this.clapDetected = true;
+            console.log('Clap detected! Distance: ' + this.handDistance);
+            
+            // Change hand colors randomly
+            const randomColor1 = '#' + Math.floor(Math.random()*16777215).toString(16);
+            const randomColor2 = '#' + Math.floor(Math.random()*16777215).toString(16);
+            
+            rightHand.setAttribute('material', 'color', randomColor1);
+            leftHand.setAttribute('material', 'color', randomColor2);
+            
+            // Set cooldown to prevent multiple detections
+            this.clapCooldown = true;
+            setTimeout(() => {
+              this.clapCooldown = false;
+            }, 1000); // 1 second cooldown
+          }
+        } else if (this.handDistance > 0.3) {
+          this.clapDetected = false;
+        }
+      }
+    });
+
+    // Custom grabbable component enhancements
+    AFRAME.registerComponent('enhanced-grabbable', {
+      init: function () {
+        // Make object work with both hand controllers and hand tracking
+        this.el.setAttribute('grabbable', {
+          maxGrabbers: 1,
+          invert: true,
+          suppressY: false
+        });
+      }
+    });
+  </script>
 </head>
-<body style="margin: 0; overflow: hidden;">
-    <script>
-        // SCENE
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x202020);
-
-        // CAMERA
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.6, 3);
-
-        // RENDERER (VR Enabled)
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        document.body.appendChild(renderer.domElement);
-        document.body.appendChild(VRButton.createButton(renderer)); // ✅ Ensures VR button appears
-
-        // LIGHTING
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(5, 10, 5);
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0x404040));
-
-        // PHYSICS WORLD
-        const world = new CANNON.World();
-        world.gravity.set(0, -9.82, 0);
-
-        // FLOOR
-        const floorBody = new CANNON.Body({
-            mass: 0,
-            shape: new CANNON.Plane(),
-            material: new CANNON.Material()
-        });
-        floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-        world.addBody(floorBody);
-
-        const floorMesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(10, 10),
-            new THREE.MeshStandardMaterial({ color: 0x555555 })
-        );
-        floorMesh.rotation.x = -Math.PI / 2;
-        scene.add(floorMesh);
-
-        // TABLE
-        const tableBody = new CANNON.Body({
-            mass: 0,
-            shape: new CANNON.Box(new CANNON.Vec3(1, 0.05, 1)),
-            position: new CANNON.Vec3(0, 0.75, -2)
-        });
-        world.addBody(tableBody);
-
-        const tableMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(2, 0.1, 2),
-            new THREE.MeshStandardMaterial({ color: 0x8B4513 })
-        );
-        tableMesh.position.set(0, 0.75, -2);
-        scene.add(tableMesh);
-
-        // RANDOM OBJECTS ON TABLE
-        const objects = [];
-        const objectBodies = [];
-
-        function createRandomObject() {
-            const shapes = ['box', 'sphere', 'cylinder'];
-            const type = shapes[Math.floor(Math.random() * shapes.length)];
-            let objectMesh, objectBody;
-
-            const x = (Math.random() - 0.5) * 1.5;
-            const y = 1;
-            const z = -2 + (Math.random() - 0.5) * 1.5;
-
-            if (type === 'box') {
-                objectMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }));
-                objectBody = new CANNON.Body({ mass: 1, shape: new CANNON.Box(new CANNON.Vec3(0.1, 0.1, 0.1)) });
-            } else if (type === 'sphere') {
-                objectMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }));
-                objectBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.1) });
-            } else {
-                objectMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 16), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff }));
-                objectBody = new CANNON.Body({ mass: 1, shape: new CANNON.Cylinder(0.1, 0.1, 0.2, 16) });
-            }
-
-            objectMesh.position.set(x, y, z);
-            objectBody.position.set(x, y, z);
-            scene.add(objectMesh);
-            world.addBody(objectBody);
-
-            objects.push(objectMesh);
-            objectBodies.push(objectBody);
-        }
-
-        for (let i = 0; i < 10; i++) {
-            createRandomObject();
-        }
-
-        // VR CONTROLLERS (Hands)
-        const controller1 = renderer.xr.getController(0);
-        scene.add(controller1);
-
-        const controller2 = renderer.xr.getController(1);
-        scene.add(controller2);
-
-        // INTERACTION (PUSH OBJECTS)
-        function checkCollision(controller) {
-            for (let i = 0; i < objects.length; i++) {
-                const dist = controller.position.distanceTo(objects[i].position);
-                if (dist < 0.2) {
-                    objectBodies[i].applyImpulse(new CANNON.Vec3(0, 2, 0), objectBodies[i].position);
-                }
-            }
-        }
-
-        controller1.addEventListener('selectstart', () => checkCollision(controller1));
-        controller2.addEventListener('selectstart', () => checkCollision(controller2));
-
-        // UPDATE LOOP
-        function animate() {
-            world.step(1 / 60);
-
-            for (let i = 0; i < objects.length; i++) {
-                objects[i].position.copy(objectBodies[i].position);
-                objects[i].quaternion.copy(objectBodies[i].quaternion);
-            }
-
-            renderer.setAnimationLoop(() => {
-                renderer.render(scene, camera);
-            });
-        }
-
-        animate();
-    </script>
+<body>
+  <a-scene physics="driver: local; debug: false; gravity: -9.8;"
+           background="color: #87CEEB"
+           renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true;"
+           webxr="referenceSpaceType: local;"
+           gesture-handler="rightHandEl: #rightHand; leftHandEl: #leftHand; objects: .grabbable">
+    
+    <!-- Asset Management -->
+    <a-assets>
+      <img id="grass" src="https://cdn.glitch.global/a0c4a2bc-54e4-42a3-9987-b71e28a4af63/grass.jpg?v=1624441179183" crossorigin="anonymous">
+      <img id="stone" src="https://cdn.glitch.global/a0c4a2bc-54e4-42a3-9987-b71e28a4af63/stone.jpg?v=1624441203989" crossorigin="anonymous">
+    </a-assets>
+    
+    <!-- Camera and Controls -->
+    <a-entity id="cameraRig" position="0 0 0">
+      <a-entity id="camera" camera look-controls wasd-controls position="0 1.6 0"></a-entity>
+      
+      <!-- Hand Controllers -->
+      <a-entity id="leftController" 
+                hand-controls="hand: left; handModelStyle: lowPoly; color: #ffcccc" 
+                laser-controls="hand: left"
+                raycaster="showLine: true; far: 10; interval: 100; lineColor: #FF5555; lineOpacity: 0.5"
+                oculus-touch-controls="hand: left"
+                sphere-collider="objects: .grabbable; radius: 0.02"
+                super-hands="colliderEvent: collisions;
+                           colliderEventProperty: els;
+                           colliderEndEvent: collisions;
+                           colliderEndEventProperty: clearedEls;"></a-entity>
+      
+      <a-entity id="rightController" 
+                hand-controls="hand: right; handModelStyle: lowPoly; color: #ccffcc" 
+                laser-controls="hand: right"
+                raycaster="showLine: true; far: 10; interval: 100; lineColor: #55FF55; lineOpacity: 0.5"
+                oculus-touch-controls="hand: right"
+                sphere-collider="objects: .grabbable; radius: 0.02"
+                super-hands="colliderEvent: collisions;
+                           colliderEventProperty: els;
+                           colliderEndEvent: collisions;
+                           colliderEndEventProperty: clearedEls;"></a-entity>
+      
+      <!-- Hand Tracking -->
+      <a-entity id="leftHand"
+                hand-tracking-controls="hand: left; modelColor: #ffcccc;" 
+                material="color: #ffcccc; shader: flat; opacity: 0.7"
+                sphere-collider="objects: .grabbable; radius: 0.02"
+                super-hands="colliderEvent: collisions;
+                         colliderEventProperty: els;
+                         colliderEndEvent: collisions;
+                         colliderEndEventProperty: clearedEls;"></a-entity>
+      
+      <a-entity id="rightHand"
+                hand-tracking-controls="hand: right; modelColor: #ccffcc;" 
+                material="color: #ccffcc; shader: flat; opacity: 0.7"
+                sphere-collider="objects: .grabbable; radius: 0.02"
+                super-hands="colliderEvent: collisions;
+                         colliderEventProperty: els;
+                         colliderEndEvent: collisions;
+                         colliderEndEventProperty: clearedEls;"></a-entity>
+    </a-entity>
+    
+    <!-- Environment -->
+    <a-plane position="0 0 0" 
+             rotation="-90 0 0" 
+             width="30" 
+             height="30" 
+             material="src: #grass; repeat: 10 10"
+             shadow="receive: true"
+             static-body></a-plane>
+    
+    <!-- Lighting -->
+    <a-light type="ambient" color="#BBB" intensity="0.5"></a-light>
+    <a-light type="directional" 
+             color="#FFF" 
+             intensity="0.8" 
+             position="-1 1 1" 
+             cast-shadow="true"
+             shadow-camera-left="-10"
+             shadow-camera-right="10"
+             shadow-camera-top="10"
+             shadow-camera-bottom="-10"></a-light>
+    
+    <!-- Grabbable Objects -->
+    <a-box class="grabbable"
+           position="-0.5 0.5 -1" 
+           width="0.5" 
+           height="0.5" 
+           depth="0.5"
+           material="src: #stone" 
+           shadow="cast: true; receive: true"
+           enhanced-grabbable
+           dynamic-body="mass: 2; linearDamping: 0.5; angularDamping: 0.5;"></a-box>
+    
+    <a-sphere class="grabbable"
+              position="0.5 0.5 -1" 
+              radius="0.25"
+              material="color: gold; metalness: 0.8; roughness: 0.2" 
+              shadow="cast: true; receive: true"
+              enhanced-grabbable
+              dynamic-body="mass: 1; linearDamping: 0.5; angularDamping: 0.5;"></a-sphere>
+    
+    <!-- Environment elements -->
+    <a-entity environment="preset: default; 
+                        groundColor: #5d8a68; 
+                        ground: flat; 
+                        groundTexture: none; 
+                        lighting: none; 
+                        shadow: true; 
+                        dressing: none;
+                        grid: none;"></a-entity>
+  </a-scene>
 </body>
 </html>
