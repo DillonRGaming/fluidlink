@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Quest 2 Hand Tracking Test</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+</head>
+<body>
+    <a-scene physics="driver: ammo">
+        <!-- Camera (Headset View) -->
+        <a-entity id="camera" camera position="0 1.6 0" look-controls wasd-controls></a-entity>
+
+        <!-- Hand Tracking -->
+        <a-entity id="leftHand" hand-tracking-controls="hand: left" 
+                  physics-collider grab-start="target: #grabbableBox"></a-entity>
+        <a-entity id="rightHand" hand-tracking-controls="hand: right" 
+                  physics-collider grab-start="target: #grabbableBox"></a-entity>
+
+        <!-- Ground -->
+        <a-plane rotation="-90 0 0" width="10" height="10" color="#7BC8A4" static-body></a-plane>
+
+        <!-- Grabbable Box -->
+        <a-box id="grabbableBox" position="0 0.5 -2" width="0.5" height="0.5" depth="0.5" 
+               color="red" dynamic-body grabbable></a-box>
+
+        <!-- Sky -->
+        <a-sky color="#ECECEC"></a-sky>
+    </a-scene>
+</body>
+</html>
